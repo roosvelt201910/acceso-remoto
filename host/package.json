@@ -1,0 +1,15 @@
+{
+  "name": "remote-host-agent",
+  "version": "1.0.0",
+  "description": "Agente Host de captura de pantalla y ejecución de eventos de entrada remota",
+  "main": "host.js",
+  "scripts": {
+    "start": "node host.js"
+  },
+  "dependencies": {
+    "screenshot-desktop": "^1.15.0",
+    "sharp": "^0.33.5",
+    "ws": "^8.18.0",
+    "dotenv": "^16.4.7"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "remote-signaling-server",
+  "version": "1.0.0",
+  "description": "Servidor de señalización y retransmisión WebSocket para acceso remoto",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "dotenv": "^16.4.7"
+  }
+}

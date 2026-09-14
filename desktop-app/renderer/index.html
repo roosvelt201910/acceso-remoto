@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AnyDesk Remote Desktop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    
+    <!-- Barra Superior -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <h2>AnyDesk <span>Desktop</span></h2>
+          <span class="author-tag">Por: Ing. Roosvelt Enriquez Gamez</span>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <span class="status-dot online" id="statusDot"></span>
+        <span id="statusLabel">Listo para conectar</span>
+      </div>
+    </header>
+
+    <!-- Vista Principal: Pantalla Dividida Estilo AnyDesk Oficial -->
+    <main class="main-dashboard" id="mainDashboard">
+      <div class="cards-grid">
+        
+        <!-- Tarjeta 1: Este Puesto de Trabajo (Tu PC) -->
+        <div class="card local-station-card">
+          <div class="card-header">
+            <div class="card-icon local-icon">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+            </div>
+            <div>
+              <h3>Este Puesto de Trabajo</h3>
+              <p>Tu dirección para permitir que otros controlen esta PC</p>
+            </div>
+          </div>
+
+          <div class="station-id-box">
+            <span class="station-id" id="myDesktopId">--- --- ---</span>
+            <button class="copy-btn" id="copyIdBtn" title="Copiar ID">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Copiar
+            </button>
+          </div>
+
+          <div class="card-footer-info">
+            <div class="switch-container">
+              <span class="switch-label">Permitir control remoto continuo:</span>
+              <span class="badge badge-success">Activo</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tarjeta 2: Otro Puesto de Trabajo (Conectar a PC Remota) -->
+        <div class="card remote-station-card">
+          <div class="card-header">
+            <div class="card-icon remote-icon">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3>Otro Puesto de Trabajo</h3>
+              <p>Introduce la dirección del equipo remoto para acceder</p>
+            </div>
+          </div>
+
+          <div class="remote-connect-form">
+            <div class="input-wrapper">
+              <input type="text" id="targetIdInput" placeholder="Introduce el ID (ej: 948 882 612)" maxlength="15" autocomplete="off">
+            </div>
+            <button class="connect-action-btn" id="startRemoteSessionBtn">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Conectar
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Vista de Sesión Remota (Canvas en Vivo cuando estás conectado a otra PC) -->
+    <div class="remote-session-view" id="remoteSessionView" style="display: none;">
+      <div class="session-toolbar">
+        <span class="session-title">Controlando PC Remota: <strong id="connectedTargetId">---</strong></span>
+        <div class="toolbar-actions">
+          <button id="disconnectSessionBtn" class="btn-danger-sm">Cerrar Sesión</button>
+        </div>
+      </div>
+      <div class="session-canvas-container">
+        <canvas id="desktopCanvas" tabindex="0"></canvas>
+      </div>
+    </div>
+
+    <!-- Pie de Página -->
+    <footer class="app-footer">
+      <span>AnyDesk Desktop System | Desarrollado por: <strong>Ing. Roosvelt Enriquez Gamez</strong></span>
+    </footer>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

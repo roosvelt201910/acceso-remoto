@@ -1,0 +1,57 @@
+{
+  "name": "roosvelt-remote-desktop",
+  "version": "1.0.0",
+  "description": "Aplicación de Escritorio Remoto Multiplataforma",
+  "main": "main.js",
+  "author": "Ing. Roosvelt Enriquez Gamez",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.roosvelt.remotedesktop",
+    "productName": "Roosvelt Remote Desktop",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": ["dmg", "zip"],
+      "identity": null
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        },
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "license": "LICENSE.txt",
+      "include": "build/installer.nsh",
+      "shortcutName": "Roosvelt Remote Desktop",
+      "uninstallDisplayName": "Roosvelt Remote Desktop (Desinstalar)",
+      "artifactName": "${productName} Setup ${version}.${ext}"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"]
+    }
+  }
+}

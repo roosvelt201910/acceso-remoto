@@ -1,0 +1,22 @@
+{
+  "name": "remote-desktop-minimalist",
+  "version": "1.0.0",
+  "description": "Sistema de escritorio remoto minimalista estilo AnyDesk (Señalización + Host + Cliente Web)",
+  "scripts": {
+    "start:server": "cd signaling-server && npm start",
+    "start:host": "cd host && npm start",
+    "start:client": "npx http-server client -p 8080 -c-1",
+    "install:all": "npm --prefix signaling-server install && npm --prefix host install",
+    "dev": "bash start-local.sh"
+  },
+  "keywords": [
+    "remote-desktop",
+    "anydesk-clone",
+    "webrtc",
+    "websocket",
+    "canvas",
+    "screen-share"
+  ],
+  "author": "Ing. Roosvelt Enriquez Gamez",
+  "license": "MIT"
+}

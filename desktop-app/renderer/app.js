@@ -25,8 +25,8 @@ function formatId(id) {
   return id.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
 }
 
-// Servidor Central de Señalización Automático
-const DEFAULT_SIGNALING_SERVER = 'ws://192.168.3.141:9000';
+// Servidor Central de Señalización en la Nube (Internet 24/7)
+const DEFAULT_SIGNALING_SERVER = 'wss://acceso-remoto.onrender.com';
 let currentActiveServerUrl = DEFAULT_SIGNALING_SERVER;
 
 // Sockets

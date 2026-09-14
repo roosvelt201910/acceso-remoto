@@ -5,7 +5,7 @@ const os = require('os');
 const dgram = require('dgram');
 
 let mainWindow = null;
-let discoveredServerUrl = 'ws://192.168.3.141:9000'; // Default inteligente
+let discoveredServerUrl = 'wss://acceso-remoto.onrender.com'; // Servidor Cloud Global
 
 // ========================================================
 // Autodescubrimiento UDP en Red Local (Zero-Config)

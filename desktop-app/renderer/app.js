@@ -166,17 +166,36 @@ async function startScreenCaptureBroadcaster() {
     await video.play();
 
     const offscreenCanvas = document.createElement('canvas');
-    const offCtx = offscreenCanvas.getContext('2d');
+    const offCtx = offscreenCanvas.getContext('2d', { alpha: false });
+
+    // Escala inteligente para máxima fluidez y ultra baja latencia
+    const MAX_WIDTH = 1280;
+    let targetWidth = video.videoWidth;
+    let targetHeight = video.videoHeight;
+    if (targetWidth > MAX_WIDTH) {
+      const scale = MAX_WIDTH / targetWidth;
+      targetWidth = MAX_WIDTH;
+      targetHeight = Math.round(video.videoHeight * scale);
+    }
+    offscreenCanvas.width = targetWidth;
+    offscreenCanvas.height = targetHeight;
 
     let seq = 0;
     broadcastTimer = setInterval(() => {
       if (!hostWs || hostWs.readyState !== WebSocket.OPEN || video.videoWidth === 0) return;
 
-      offscreenCanvas.width = video.videoWidth;
-      offscreenCanvas.height = video.videoHeight;
-      offCtx.drawImage(video, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+      // Control de Flujo Inteligente: Evita encolamiento y lag si la red está saturada
+      if (hostWs.bufferedAmount > 64 * 1024) return;
 
-      const jpegBase64 = offscreenCanvas.toDataURL('image/jpeg', 0.65);
+      if (offscreenCanvas.width !== targetWidth || offscreenCanvas.height !== targetHeight) {
+        offscreenCanvas.width = targetWidth;
+        offscreenCanvas.height = targetHeight;
+      }
+
+      offCtx.drawImage(video, 0, 0, targetWidth, targetHeight);
+
+      // Compresión turbo optimizada (calidad 0.55 = fotogramas ultraligeros de ~25KB)
+      const jpegBase64 = offscreenCanvas.toDataURL('image/jpeg', 0.55);
       seq++;
 
       hostWs.send(JSON.stringify({
@@ -184,15 +203,15 @@ async function startScreenCaptureBroadcaster() {
         sessionId: myStationId,
         payload: {
           seq: seq,
-          width: video.videoWidth,
-          height: video.videoHeight,
+          width: targetWidth,
+          height: targetHeight,
           data: jpegBase64,
           timestamp: Date.now()
         }
       }));
-    }, 1000 / 25); // 25 FPS
+    }, 1000 / 30); // 30 FPS fluido
 
-    console.log('[Desktop Host] Transmisión activa a 25 FPS.');
+    console.log('[Desktop Host] Transmisión activa de alto rendimiento a 30 FPS.');
 
   } catch (err) {
     console.error('Error al capturar pantalla del host:', err);

@@ -168,24 +168,55 @@ async function startScreenCaptureBroadcaster() {
     const offscreenCanvas = document.createElement('canvas');
     const offCtx = offscreenCanvas.getContext('2d', { alpha: false });
 
-    // Escala inteligente para máxima fluidez y ultra baja latencia
-    const MAX_WIDTH = 1280;
-    let targetWidth = video.videoWidth;
-    let targetHeight = video.videoHeight;
-    if (targetWidth > MAX_WIDTH) {
-      const scale = MAX_WIDTH / targetWidth;
-      targetWidth = MAX_WIDTH;
-      targetHeight = Math.round(video.videoHeight * scale);
-    }
-    offscreenCanvas.width = targetWidth;
-    offscreenCanvas.height = targetHeight;
+    // ========================================================
+    // Motor Auto-QoS: Adaptación Automática de Resolución y Ancho de Banda
+    // ========================================================
+    const QOS_PROFILES = [
+      { maxWidth: 960,  quality: 0.45, name: 'Eco (Bajo Ancho de Banda)' },
+      { maxWidth: 1280, quality: 0.55, name: 'Equilibrado (Internet Estándar)' },
+      { maxWidth: 1600, quality: 0.65, name: 'Alta Definición (Banda Ancha)' },
+      { maxWidth: 1920, quality: 0.75, name: 'Ultra HD (Fibra / Alta Velocidad)' }
+    ];
 
+    let currentQosIndex = 1; // Iniciar en modo equilibrado (1280px / 0.55)
+    let stableGoodFrames = 0;
+    let congestionCount = 0;
     let seq = 0;
+
     broadcastTimer = setInterval(() => {
       if (!hostWs || hostWs.readyState !== WebSocket.OPEN || video.videoWidth === 0) return;
 
-      // Control de Flujo Inteligente: Evita encolamiento y lag si la red está saturada
-      if (hostWs.bufferedAmount > 64 * 1024) return;
+      // 1. Detección Inteligente de Salud de Red y Control de Congestión
+      if (hostWs.bufferedAmount > 48 * 1024) {
+        congestionCount++;
+        stableGoodFrames = 0;
+        // Si el buffer se llena constantemente, bajar resolución/calidad al instante
+        if (congestionCount >= 2 && currentQosIndex > 0) {
+          currentQosIndex--;
+          congestionCount = 0;
+          console.log(`[Auto-QoS] Red saturada -> Bajando a: ${QOS_PROFILES[currentQosIndex].name}`);
+        }
+        return; // Descartar fotograma para mantener 0ms de latencia
+      } else {
+        congestionCount = 0;
+        stableGoodFrames++;
+        // Si la red se mantiene 100% fluida durante 60 fotogramas (~2 seg), subir calidad
+        if (stableGoodFrames >= 60 && currentQosIndex < QOS_PROFILES.length - 1) {
+          currentQosIndex++;
+          stableGoodFrames = 0;
+          console.log(`[Auto-QoS] Conexión excelente -> Subiendo a: ${QOS_PROFILES[currentQosIndex].name}`);
+        }
+      }
+
+      // 2. Calcular resolución dinámica según el perfil activo
+      const profile = QOS_PROFILES[currentQosIndex];
+      let targetWidth = video.videoWidth;
+      let targetHeight = video.videoHeight;
+      if (targetWidth > profile.maxWidth) {
+        const scale = profile.maxWidth / targetWidth;
+        targetWidth = profile.maxWidth;
+        targetHeight = Math.round(video.videoHeight * scale);
+      }
 
       if (offscreenCanvas.width !== targetWidth || offscreenCanvas.height !== targetHeight) {
         offscreenCanvas.width = targetWidth;
@@ -194,8 +225,8 @@ async function startScreenCaptureBroadcaster() {
 
       offCtx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
-      // Compresión turbo optimizada (calidad 0.55 = fotogramas ultraligeros de ~25KB)
-      const jpegBase64 = offscreenCanvas.toDataURL('image/jpeg', 0.55);
+      // 3. Compresión adaptativa
+      const jpegBase64 = offscreenCanvas.toDataURL('image/jpeg', profile.quality);
       seq++;
 
       hostWs.send(JSON.stringify({
@@ -209,9 +240,9 @@ async function startScreenCaptureBroadcaster() {
           timestamp: Date.now()
         }
       }));
-    }, 1000 / 30); // 30 FPS fluido
+    }, 1000 / 30); // 30 FPS constantes y fluidos
 
-    console.log('[Desktop Host] Transmisión activa de alto rendimiento a 30 FPS.');
+    console.log('[Desktop Host] Transmisión activa con Auto-QoS Inteligente.');
 
   } catch (err) {
     console.error('Error al capturar pantalla del host:', err);

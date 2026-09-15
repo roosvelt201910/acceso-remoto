@@ -95,53 +95,107 @@ ipcMain.handle('get-screen-sources', async () => {
 });
 
 // ========================================================
-// IPC: Ejecución de Eventos de Entrada en el Sistema Operativo
+// Controlador Nativo de Entrada de Ultra Baja Latencia (0ms)
 // ========================================================
+let winInputProcess = null;
+
+if (os.platform() === 'win32') {
+  // Iniciar proceso PowerShell persistente con C# Win32 P/Invoke para 0ms de lag
+  const initScript = `
+    $code = @'
+    using System;
+    using System.Runtime.InteropServices;
+    public class Win32Input {
+      [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+      [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, int extra);
+      [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+      
+      public static void Move(int x, int y) { SetCursorPos(x, y); }
+      public static void Click(int x, int y, uint flags) { SetCursorPos(x, y); mouse_event(flags, 0, 0, 0, 0); }
+      public static void Mouse(uint flags) { mouse_event(flags, 0, 0, 0, 0); }
+      public static void Wheel(int delta) { mouse_event(0x0800, 0, 0, (uint)delta, 0); }
+      public static void Key(byte vk, uint flags) { keybd_event(vk, 0, flags, 0); }
+    }
+'@
+    Add-Type -TypeDefinition $code -Language CSharp
+    while ($true) {
+      $line = [Console]::In.ReadLine()
+      if (-not $line) { break }
+      Invoke-Expression $line
+    }
+  `;
+
+  winInputProcess = exec('powershell -NoProfile -NonInteractive -Command -', { windowsHide: true });
+  if (winInputProcess && winInputProcess.stdin) {
+    winInputProcess.stdin.write(initScript + '\n');
+  }
+}
+
+// IPC: Ejecución de Eventos de Entrada en el Sistema Operativo
 ipcMain.on('execute-input', (event, inputData) => {
-  const { action, normX, normY, button, key, deltaY } = inputData;
+  if (!inputData) return;
+  const { action, normX, normY, button, key, keyCode, deltaY } = inputData;
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.size;
 
-  let x = Math.round((normX || 0) * width);
-  let y = Math.round((normY || 0) * height);
+  let x = Math.round((normX !== undefined ? normX : 0.5) * width);
+  let y = Math.round((normY !== undefined ? normY : 0.5) * height);
+  x = Math.max(0, Math.min(width - 1, x));
+  y = Math.max(0, Math.min(height - 1, y));
+
   const platform = os.platform();
 
-  if (action === 'mousemove') {
-    if (platform === 'darwin') {
-      const script = `osascript -l JavaScript -e "
-        ObjC.import('CoreGraphics');
-        var point = $.CGPointMake(${x}, ${y});
-        $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateMouseEvent(null, $.kCGEventMouseMoved, point, 0));
-      "`;
-      exec(script, () => {});
-    } else if (platform === 'linux') {
-      exec(`xdotool mousemove ${x} ${y}`, () => {});
-    } else if (platform === 'win32') {
-      exec(`powershell -Command "[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x}, ${y})"`, () => {});
+  if (platform === 'win32' && winInputProcess && winInputProcess.stdin) {
+    // Windows: Despacho a través de Win32 API directa
+    if (action === 'mousemove') {
+      winInputProcess.stdin.write(`[Win32Input]::Move(${x}, ${y})\n`);
+    } else if (action === 'mousedown') {
+      const flag = button === 2 ? '0x0008' : (button === 1 ? '0x0020' : '0x0002');
+      winInputProcess.stdin.write(`[Win32Input]::Click(${x}, ${y}, ${flag})\n`);
+    } else if (action === 'mouseup') {
+      const flag = button === 2 ? '0x0010' : (button === 1 ? '0x0040' : '0x0004');
+      winInputProcess.stdin.write(`[Win32Input]::Click(${x}, ${y}, ${flag})\n`);
+    } else if (action === 'click') {
+      const down = button === 2 ? '0x0008' : '0x0002';
+      const up = button === 2 ? '0x0010' : '0x0004';
+      winInputProcess.stdin.write(`[Win32Input]::Click(${x}, ${y}, ${down} -bor ${up})\n`);
+    } else if (action === 'dblclick') {
+      const down = '0x0002';
+      const up = '0x0004';
+      winInputProcess.stdin.write(`[Win32Input]::Click(${x}, ${y}, ${down} -bor ${up}); [Win32Input]::Click(${x}, ${y}, ${down} -bor ${up})\n`);
+    } else if (action === 'wheel') {
+      const delta = deltaY > 0 ? -120 : 120;
+      winInputProcess.stdin.write(`[Win32Input]::Wheel(${delta})\n`);
+    } else if (action === 'keydown') {
+      const vk = keyCode || 0;
+      if (vk > 0) {
+        winInputProcess.stdin.write(`[Win32Input]::Key(${vk}, 0)\n`);
+      }
+    } else if (action === 'keyup') {
+      const vk = keyCode || 0;
+      if (vk > 0) {
+        winInputProcess.stdin.write(`[Win32Input]::Key(${vk}, 2)\n`);
+      }
     }
-  } else if (action === 'click' || action === 'mousedown' || action === 'mouseup') {
-    const isRight = button === 2;
-    if (platform === 'darwin') {
+  } else if (platform === 'darwin') {
+    // macOS: Despacho CoreGraphics nativo
+    if (action === 'mousemove') {
+      const script = `osascript -l JavaScript -e "ObjC.import('CoreGraphics'); $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateMouseEvent(null, $.kCGEventMouseMoved, $.CGPointMake(${x}, ${y}), 0));"`;
+      exec(script, () => {});
+    } else if (action === 'click' || action === 'mousedown' || action === 'mouseup') {
+      const isRight = button === 2;
       const downType = isRight ? '$.kCGEventRightMouseDown' : '$.kCGEventLeftMouseDown';
       const upType = isRight ? '$.kCGEventRightMouseUp' : '$.kCGEventLeftMouseUp';
-      const script = `osascript -l JavaScript -e "
-        ObjC.import('CoreGraphics');
-        var point = $.CGPointMake(${x}, ${y});
-        $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateMouseEvent(null, ${downType}, point, ${isRight ? 1 : 0}));
-        $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateMouseEvent(null, ${upType}, point, ${isRight ? 1 : 0}));
-      "`;
+      const flag = isRight ? 1 : 0;
+      const script = `osascript -l JavaScript -e "ObjC.import('CoreGraphics'); var p = $.CGPointMake(${x}, ${y}); $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateMouseEvent(null, ${downType}, p, ${flag})); $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateMouseEvent(null, ${upType}, p, ${flag}));"`;
       exec(script, () => {});
-    } else if (platform === 'linux') {
-      exec(`xdotool mousemove ${x} ${y} click ${isRight ? 3 : 1}`, () => {});
-    }
-  } else if (action === 'keydown') {
-    if (key && key.length === 1) {
-      if (platform === 'darwin') {
-        const escaped = key.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        exec(`osascript -e 'tell application "System Events" to keystroke "${escaped}"'`, () => {});
-      } else if (platform === 'linux') {
-        exec(`xdotool key "${key}"`, () => {});
-      }
+    } else if (action === 'wheel') {
+      const amount = deltaY > 0 ? -5 : 5;
+      const script = `osascript -l JavaScript -e "ObjC.import('CoreGraphics'); $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateScrollWheelEvent(null, 0, 1, ${amount}));"`;
+      exec(script, () => {});
+    } else if (action === 'keydown' && key && key.length === 1) {
+      const escaped = key.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      exec(`osascript -e 'tell application "System Events" to keystroke "${escaped}"'`, () => {});
     }
   }
 });

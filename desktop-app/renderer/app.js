@@ -210,6 +210,8 @@ startRemoteSessionBtn.addEventListener('click', () => {
   connectToRemotePc(currentActiveServerUrl, targetId);
 });
 
+let connectedSessionTargetId = null;
+
 function connectToRemotePc(url, targetId) {
   statusLabel.textContent = 'Conectando a ' + targetId + '...';
 
@@ -232,6 +234,7 @@ function connectToRemotePc(url, targetId) {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === 'SESSION_CONNECTED') {
+        connectedSessionTargetId = targetId;
         connectedTargetIdEl.textContent = formatId(targetId);
         mainDashboard.style.display = 'none';
         remoteSessionView.style.display = 'flex';
@@ -246,7 +249,7 @@ function connectToRemotePc(url, targetId) {
   };
 
   clientWs.onerror = () => {
-    alert('No se pudo conectar al servidor de señalización [' + url + '].\n\nAsegúrate de poner la IP correcta de la PC principal (ej: ws://192.168.3.141:9000 o tu dominio en la nube).');
+    alert('No se pudo conectar al servidor en la nube.');
     disconnectRemoteSession();
   };
 
@@ -279,37 +282,97 @@ function disconnectRemoteSession() {
     clientWs.close();
     clientWs = null;
   }
+  connectedSessionTargetId = null;
   mainDashboard.style.display = 'flex';
   remoteSessionView.style.display = 'none';
 }
 
 disconnectSessionBtn.addEventListener('click', disconnectRemoteSession);
 
-// Captura de Ratón hacia la PC Remota
-desktopCanvas.addEventListener('mousemove', (e) => {
-  if (!clientWs || clientWs.readyState !== WebSocket.OPEN) return;
+// ========================================================
+// 3. Captura y Envío de Control Total (Ratón y Teclado)
+// ========================================================
+
+function getCanvasCoordinates(e) {
   const rect = desktopCanvas.getBoundingClientRect();
   const normX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   const normY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+  return { normX, normY };
+}
 
+function sendRemoteInput(payload) {
+  if (!clientWs || clientWs.readyState !== WebSocket.OPEN || !connectedSessionTargetId) return;
   clientWs.send(JSON.stringify({
     type: 'INPUT_EVENT',
-    sessionId: targetIdInput.value.replace(/\s+/g, '').trim(),
-    payload: { action: 'mousemove', normX, normY }
+    sessionId: connectedSessionTargetId,
+    payload: payload
   }));
+}
+
+// Movimiento de Ratón (Throttled a ~40 updates/seg)
+let lastMoveTime = 0;
+desktopCanvas.addEventListener('mousemove', (e) => {
+  const now = performance.now();
+  if (now - lastMoveTime < 25) return;
+  lastMoveTime = now;
+
+  const { normX, normY } = getCanvasCoordinates(e);
+  sendRemoteInput({ action: 'mousemove', normX, normY });
 });
 
-desktopCanvas.addEventListener('click', (e) => {
-  if (!clientWs || clientWs.readyState !== WebSocket.OPEN) return;
-  const rect = desktopCanvas.getBoundingClientRect();
-  const normX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  const normY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+// Clics y Pulsaciones de Ratón
+desktopCanvas.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  const { normX, normY } = getCanvasCoordinates(e);
+  sendRemoteInput({ action: 'mousedown', normX, normY, button: e.button });
+});
 
-  clientWs.send(JSON.stringify({
-    type: 'INPUT_EVENT',
-    sessionId: targetIdInput.value.replace(/\s+/g, '').trim(),
-    payload: { action: 'click', normX, normY, button: e.button }
-  }));
+desktopCanvas.addEventListener('mouseup', (e) => {
+  e.preventDefault();
+  const { normX, normY } = getCanvasCoordinates(e);
+  sendRemoteInput({ action: 'mouseup', normX, normY, button: e.button });
+});
+
+desktopCanvas.addEventListener('dblclick', (e) => {
+  e.preventDefault();
+  const { normX, normY } = getCanvasCoordinates(e);
+  sendRemoteInput({ action: 'dblclick', normX, normY });
+});
+
+desktopCanvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  sendRemoteInput({ action: 'wheel', deltaY: e.deltaY, deltaX: e.deltaX });
+}, { passive: false });
+
+desktopCanvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault(); // Deshabilitar menú local para enviar clic derecho remoto
+});
+
+// Teclado Interactivo Remoto
+window.addEventListener('keydown', (e) => {
+  if (!connectedSessionTargetId || !clientWs || clientWs.readyState !== WebSocket.OPEN) return;
+  
+  if (['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+    e.preventDefault();
+  }
+
+  sendRemoteInput({
+    action: 'keydown',
+    key: e.key,
+    keyCode: e.keyCode,
+    ctrlKey: e.ctrlKey,
+    altKey: e.altKey,
+    shiftKey: e.shiftKey
+  });
+});
+
+window.addEventListener('keyup', (e) => {
+  if (!connectedSessionTargetId || !clientWs || clientWs.readyState !== WebSocket.OPEN) return;
+  sendRemoteInput({
+    action: 'keyup',
+    key: e.key,
+    keyCode: e.keyCode
+  });
 });
 
 copyIdBtn.addEventListener('click', () => {

@@ -69,6 +69,8 @@ async function initHostAgent() {
     }
     hostWs = new WebSocket(url);
 
+    let pingInterval = null;
+
     hostWs.onopen = () => {
       console.log('[Desktop Host] Conectado exitosamente al servidor de señalización:', url);
       statusDot.className = 'status-dot online';
@@ -79,6 +81,14 @@ async function initHostAgent() {
         sessionId: myStationId,
         payload: { app: 'electron-desktop' }
       }));
+
+      // Mantener conexión activa 24/7 con Heartbeat Ping
+      if (pingInterval) clearInterval(pingInterval);
+      pingInterval = setInterval(() => {
+        if (hostWs && hostWs.readyState === WebSocket.OPEN) {
+          hostWs.send(JSON.stringify({ type: 'PING' }));
+        }
+      }, 15000);
     };
 
     hostWs.onmessage = async (event) => {
@@ -100,18 +110,22 @@ async function initHostAgent() {
     };
 
     hostWs.onclose = () => {
+      if (pingInterval) clearInterval(pingInterval);
       statusDot.className = 'status-dot';
       statusLabel.textContent = 'Reconectando al servidor...';
+      setTimeout(initHostAgent, 3000);
     };
 
     hostWs.onerror = (err) => {
       console.warn('Error en conexión con servidor de señalización:', url);
       statusDot.className = 'status-dot';
       statusLabel.textContent = 'Servidor no disponible (' + url + ')';
+      try { hostWs.close(); } catch(e) {}
     };
   } catch (err) {
     console.error('Error conectando host:', err);
     statusLabel.textContent = 'Error de conexión';
+    setTimeout(initHostAgent, 4000);
   }
 }
 

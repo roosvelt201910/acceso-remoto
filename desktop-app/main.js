@@ -57,8 +57,66 @@ function createWindow() {
   });
 }
 
+const fs = require('fs');
+const { spawn } = require('child_process');
+
+let winInputProcess = null;
+
+function initWinInput() {
+  if (os.platform() !== 'win32') return;
+  try {
+    const scriptPath = path.join(app.getPath('temp'), 'roosvelt-win-input.ps1');
+    const scriptContent = `Add-Type -AssemblyName System.Windows.Forms
+$code = @'
+using System;
+using System.Runtime.InteropServices;
+public class Win32Input {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, int extra);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+  
+  public static void M(int x, int y) { SetCursorPos(x, y); }
+  public static void C(int x, int y, uint f) { SetCursorPos(x, y); mouse_event(f, 0, 0, 0, 0); }
+  public static void W(int d) { mouse_event(0x0800, 0, 0, (uint)d, 0); }
+  public static void Key(byte k, uint f) { keybd_event(k, 0, f, 0); }
+}
+'@
+Add-Type -TypeDefinition $code -Language CSharp
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+while ($true) {
+    $line = [Console]::In.ReadLine()
+    if ($null -eq $line) { break }
+    if ($line.Trim().Length -eq 0) { continue }
+    try {
+        Invoke-Expression $line
+    } catch {}
+}
+`;
+    fs.writeFileSync(scriptPath, scriptContent, 'utf8');
+
+    winInputProcess = spawn('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy', 'Bypass',
+      '-File', scriptPath
+    ], {
+      windowsHide: true,
+      stdio: ['pipe', 'ignore', 'ignore']
+    });
+
+    winInputProcess.on('exit', () => {
+      winInputProcess = null;
+    });
+  } catch (err) {
+    console.error('Error iniciando controlador de entrada Win32:', err);
+  }
+}
+
 // Inicialización de la aplicación
 app.whenReady().then(() => {
+  // Inicializar controlador Win32 si estamos en Windows
+  initWinInput();
+
   // Configurar permiso automático para captura de pantalla (desktopCapturer / getDisplayMedia)
   const { session } = require('electron');
   if (session.defaultSession.setDisplayMediaRequestHandler) {
@@ -80,6 +138,9 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  if (winInputProcess) {
+    try { winInputProcess.kill(); } catch (e) {}
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -94,49 +155,14 @@ ipcMain.handle('get-screen-sources', async () => {
   return sources.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }));
 });
 
-// ========================================================
-// Controlador Nativo de Entrada de Ultra Baja Latencia (0ms)
-// ========================================================
-let winInputProcess = null;
-
-if (os.platform() === 'win32') {
-  // Iniciar proceso PowerShell persistente con C# Win32 P/Invoke para 0ms de lag
-  const initScript = `
-    $code = @'
-    using System;
-    using System.Runtime.InteropServices;
-    public class Win32Input {
-      [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
-      [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, int extra);
-      [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
-      
-      public static void Move(int x, int y) { SetCursorPos(x, y); }
-      public static void Click(int x, int y, uint flags) { SetCursorPos(x, y); mouse_event(flags, 0, 0, 0, 0); }
-      public static void Mouse(uint flags) { mouse_event(flags, 0, 0, 0, 0); }
-      public static void Wheel(int delta) { mouse_event(0x0800, 0, 0, (uint)delta, 0); }
-      public static void Key(byte vk, uint flags) { keybd_event(vk, 0, flags, 0); }
-    }
-'@
-    Add-Type -TypeDefinition $code -Language CSharp
-    while ($true) {
-      $line = [Console]::In.ReadLine()
-      if (-not $line) { break }
-      Invoke-Expression $line
-    }
-  `;
-
-  winInputProcess = exec('powershell -NoProfile -NonInteractive -Command -', { windowsHide: true });
-  if (winInputProcess && winInputProcess.stdin) {
-    winInputProcess.stdin.write(initScript + '\n');
-  }
-}
-
 // IPC: Ejecución de Eventos de Entrada en el Sistema Operativo
 ipcMain.on('execute-input', (event, inputData) => {
   if (!inputData) return;
   const { action, normX, normY, button, key, keyCode, deltaY } = inputData;
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.size;
+  const scale = primaryDisplay.scaleFactor || 1;
+  const width = Math.round(primaryDisplay.bounds.width * scale);
+  const height = Math.round(primaryDisplay.bounds.height * scale);
 
   let x = Math.round((normX !== undefined ? normX : 0.5) * width);
   let y = Math.round((normY !== undefined ? normY : 0.5) * height);
@@ -145,36 +171,41 @@ ipcMain.on('execute-input', (event, inputData) => {
 
   const platform = os.platform();
 
-  if (platform === 'win32' && winInputProcess && winInputProcess.stdin) {
-    // Windows: Despacho a través de Win32 API directa
-    if (action === 'mousemove') {
-      winInputProcess.stdin.write(`[Win32Input]::Move(${x}, ${y})\n`);
-    } else if (action === 'mousedown') {
-      const flag = button === 2 ? '0x0008' : (button === 1 ? '0x0020' : '0x0002');
-      winInputProcess.stdin.write(`[Win32Input]::Click(${x}, ${y}, ${flag})\n`);
-    } else if (action === 'mouseup') {
-      const flag = button === 2 ? '0x0010' : (button === 1 ? '0x0040' : '0x0004');
-      winInputProcess.stdin.write(`[Win32Input]::Click(${x}, ${y}, ${flag})\n`);
-    } else if (action === 'click') {
-      const down = button === 2 ? '0x0008' : '0x0002';
-      const up = button === 2 ? '0x0010' : '0x0004';
-      winInputProcess.stdin.write(`[Win32Input]::Click(${x}, ${y}, ${down} -bor ${up})\n`);
-    } else if (action === 'dblclick') {
-      const down = '0x0002';
-      const up = '0x0004';
-      winInputProcess.stdin.write(`[Win32Input]::Click(${x}, ${y}, ${down} -bor ${up}); [Win32Input]::Click(${x}, ${y}, ${down} -bor ${up})\n`);
-    } else if (action === 'wheel') {
-      const delta = deltaY > 0 ? -120 : 120;
-      winInputProcess.stdin.write(`[Win32Input]::Wheel(${delta})\n`);
-    } else if (action === 'keydown') {
-      const vk = keyCode || 0;
-      if (vk > 0) {
-        winInputProcess.stdin.write(`[Win32Input]::Key(${vk}, 0)\n`);
-      }
-    } else if (action === 'keyup') {
-      const vk = keyCode || 0;
-      if (vk > 0) {
-        winInputProcess.stdin.write(`[Win32Input]::Key(${vk}, 2)\n`);
+  if (platform === 'win32') {
+    if (!winInputProcess || !winInputProcess.stdin || winInputProcess.killed) {
+      initWinInput();
+    }
+    if (winInputProcess && winInputProcess.stdin) {
+      try {
+        if (action === 'mousemove') {
+          winInputProcess.stdin.write(`[Win32Input]::M(${x}, ${y})\r\n`);
+        } else if (action === 'mousedown') {
+          const flag = button === 2 ? 0x0008 : (button === 1 ? 0x0020 : 0x0002);
+          winInputProcess.stdin.write(`[Win32Input]::C(${x}, ${y}, ${flag})\r\n`);
+        } else if (action === 'mouseup') {
+          const flag = button === 2 ? 0x0010 : (button === 1 ? 0x0040 : 0x0004);
+          winInputProcess.stdin.write(`[Win32Input]::C(${x}, ${y}, ${flag})\r\n`);
+        } else if (action === 'click') {
+          const flag = button === 2 ? 24 : 6;
+          winInputProcess.stdin.write(`[Win32Input]::C(${x}, ${y}, ${flag})\r\n`);
+        } else if (action === 'dblclick') {
+          winInputProcess.stdin.write(`[Win32Input]::C(${x}, ${y}, 6); [Win32Input]::C(${x}, ${y}, 6)\r\n`);
+        } else if (action === 'wheel') {
+          const delta = deltaY > 0 ? -120 : 120;
+          winInputProcess.stdin.write(`[Win32Input]::W(${delta})\r\n`);
+        } else if (action === 'keydown') {
+          const vk = keyCode || 0;
+          if (vk > 0) {
+            winInputProcess.stdin.write(`[Win32Input]::Key(${vk}, 0)\r\n`);
+          }
+        } else if (action === 'keyup') {
+          const vk = keyCode || 0;
+          if (vk > 0) {
+            winInputProcess.stdin.write(`[Win32Input]::Key(${vk}, 2)\r\n`);
+          }
+        }
+      } catch (e) {
+        console.error('Error escribiendo en winInputProcess:', e);
       }
     }
   } else if (platform === 'darwin') {

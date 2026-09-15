@@ -5,34 +5,10 @@ const os = require('os');
 const dgram = require('dgram');
 
 let mainWindow = null;
-let discoveredServerUrl = 'wss://acceso-remoto.onrender.com'; // Servidor Cloud Global
-
-// ========================================================
-// Autodescubrimiento UDP en Red Local (Zero-Config)
-// ========================================================
-const udpClient = dgram.createSocket({ type: 'udp4', reuseAddr: true });
-
-udpClient.on('message', (msg) => {
-  try {
-    const data = JSON.parse(msg.toString());
-    if (data.type === 'SIGNALING_SERVER_FOUND' && data.serverUrl) {
-      discoveredServerUrl = data.serverUrl;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('server-discovered', discoveredServerUrl);
-      }
-    }
-  } catch (e) {}
-});
-
-udpClient.bind(9001, () => {
-  udpClient.setBroadcast(true);
-  // Enviar sondeo inicial a la red
-  const probe = JSON.stringify({ type: 'DISCOVER_SIGNALING_SERVER' });
-  udpClient.send(probe, 9001, '255.255.255.255', () => {});
-});
+const CLOUD_SERVER_URL = 'wss://acceso-remoto.onrender.com';
 
 ipcMain.handle('get-discovered-server', () => {
-  return discoveredServerUrl;
+  return CLOUD_SERVER_URL;
 });
 
 function createWindow() {

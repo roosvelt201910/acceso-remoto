@@ -59,7 +59,7 @@ async function startAutoDiscovery() {
 // 1. Inicializar Agente Host Automático en Segundo Plano
 // ========================================================
 async function initHostAgent() {
-  const url = currentActiveServerUrl || 'ws://192.168.3.141:9000';
+  const url = currentActiveServerUrl || DEFAULT_SIGNALING_SERVER;
   statusDot.className = 'status-dot';
   statusLabel.textContent = 'Conectando a red automática...';
 

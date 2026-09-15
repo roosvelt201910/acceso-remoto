@@ -1,9 +1,14 @@
 {
-  "name": "roosvelt-remote-desktop",
+  "name": "nexus-desktop-remote",
   "version": "1.0.0",
-  "description": "Aplicación de Escritorio Remoto Multiplataforma",
+  "description": "Aplicación de Escritorio Remoto de Alta Velocidad - NEXUS TELECOM .PE",
+  "homepage": "https://github.com/roosvelt201910/acceso-remoto",
   "main": "main.js",
-  "author": "Ing. Roosvelt Enriquez Gamez",
+  "author": {
+    "name": "NEXUS TELECOM .PE - Ing. Roosvelt Enriquez Gamez",
+    "email": "contacto@nexustelecom.pe",
+    "url": "https://github.com/roosvelt201910/acceso-remoto"
+  },
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -21,18 +26,23 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.roosvelt.remotedesktop",
-    "productName": "Roosvelt Remote Desktop",
+    "appId": "com.nexustelecom.nexusdesktopremote",
+    "productName": "Nexus Desktop Remote",
+    "directories": {
+      "output": "dist"
+    },
     "mac": {
       "category": "public.app-category.utilities",
+      "icon": "build/icon.icns",
       "target": ["dmg", "zip"],
       "identity": null
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "ia32"]
+          "arch": ["x64"]
         },
         "portable"
       ]
@@ -46,12 +56,15 @@
       "runAfterFinish": true,
       "license": "LICENSE.txt",
       "include": "build/installer.nsh",
-      "shortcutName": "Roosvelt Remote Desktop",
-      "uninstallDisplayName": "Roosvelt Remote Desktop (Desinstalar)",
+      "shortcutName": "Nexus Desktop Remote",
+      "uninstallDisplayName": "Nexus Desktop Remote (Desinstalar)",
       "artifactName": "${productName} Setup ${version}.${ext}"
     },
     "linux": {
-      "target": ["AppImage", "deb"]
+      "icon": "build/icon.png",
+      "category": "Network",
+      "maintainer": "Ing. Roosvelt Enriquez Gamez <contacto@nexustelecom.pe>",
+      "target": ["AppImage", "tar.gz"]
     }
   }
 }

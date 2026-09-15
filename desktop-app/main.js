@@ -42,7 +42,8 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     backgroundColor: '#0c0e14',
-    title: 'AnyDesk Remote Desktop - Ing. Roosvelt Enriquez Gamez',
+    icon: path.join(__dirname, 'assets', 'logo.png'),
+    title: 'Nexus Desktop Remote - NEXUS TELECOM .PE (Ing. Roosvelt Enriquez Gamez)',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,

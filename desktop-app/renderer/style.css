@@ -51,15 +51,20 @@ body {
   gap: 12px;
 }
 
-.brand-icon {
-  width: 38px;
-  height: 38px;
-  background: linear-gradient(135deg, #00e5ff 0%, #0284c7 100%);
-  border-radius: 8px;
+.brand-logo-container {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #0c0e14;
+  background: #ffffff;
+  padding: 4px 8px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.brand-logo-img {
+  height: 34px;
+  width: auto;
+  object-fit: contain;
 }
 
 .brand-info h2 {
